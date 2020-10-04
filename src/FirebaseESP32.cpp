@@ -2962,7 +2962,7 @@ bool FirebaseESP32::handleResponse(FirebaseData &fbdo)
         if (pChunkIdx == 0)
         {
           if (chunkBufSize > defaultChunkSize + strlen_P(fb_esp_pgm_str_93))
-            chunkBufSize = defaultChunkSize + +strlen_P(fb_esp_pgm_str_93); //plus file header length for later base64 decoding
+            chunkBufSize = defaultChunkSize + strlen_P(fb_esp_pgm_str_93); //plus file header length for later base64 decoding
         }
         else
         {
@@ -3264,12 +3264,9 @@ bool FirebaseESP32::handleResponse(FirebaseData &fbdo)
 
         if (fbdo.resp_dataType == fb_esp_data_type::d_blob)
         {
-
-          std::vector<uint8_t>()
-              .swap(fbdo._blob);
+          std::vector<uint8_t>().swap(fbdo._blob);
           fbdo._data.clear();
           fbdo._data2.clear();
-
           base64_decode_string((const char *)payload + response.payloadOfs, fbdo._blob);
         }
 
@@ -3589,6 +3586,9 @@ bool FirebaseESP32::handleStreamRead(FirebaseData &fbdo)
   if (millis() - STREAM_RECONNECT_INTERVAL > fbdo._streamReconnectMillis)
   {
     reconnectStream = (fbdo._isDataTimeout && !fbdo._httpConnected) || fbdo._isFCM;
+
+    if (fbdo._isDataTimeout)
+      closeHTTP(fbdo);
     fbdo._streamReconnectMillis = millis();
   }
   else
@@ -3650,10 +3650,13 @@ bool FirebaseESP32::handleStreamRead(FirebaseData &fbdo)
 void FirebaseESP32::closeHTTP(FirebaseData &fbdo)
 {
   //close the socket and free the resources used by the mbedTLS data
-  if (fbdo.httpClient.stream())
+  if (fbdo._httpConnected)
   {
-    if (fbdo.httpClient.stream()->connected())
-      fbdo.httpClient.stream()->stop();
+    if (fbdo.httpClient.stream())
+    {
+      if (fbdo.httpClient.stream()->connected())
+        fbdo.httpClient.stream()->stop();
+    }
   }
   fbdo._httpConnected = false;
 }
@@ -4243,8 +4246,8 @@ bool FirebaseESP32::sdBegin(void)
 
 bool FirebaseESP32::reconnect(FirebaseData &fbdo, unsigned long dataTime)
 {
-  bool flag = reconnect();
-  if (!flag)
+  bool ret = reconnect();
+  if (!ret)
     fbdo._httpCode = FIREBASE_ERROR_HTTPC_ERROR_CONNECTION_LOST;
 
   if (dataTime > 0)
@@ -4263,18 +4266,28 @@ bool FirebaseESP32::reconnect(FirebaseData &fbdo, unsigned long dataTime)
     }
   }
 
-  return flag;
+  return ret;
 }
 
 bool FirebaseESP32::reconnect()
 {
-  if (_reconnectWiFi && WiFi.status() != WL_CONNECTED)
+  bool status = WiFi.status() == WL_CONNECTED;
+
+  if (status)
+    _reconnectStartMillis = 0;
+
+  if (_reconnectWiFi && !status)
   {
     if (_lastReconnectMillis == 0)
     {
-      WiFi.reconnect();
+      if (_reconnectStartMillis > 0)
+        WiFi.reconnect();
+
       _lastReconnectMillis = millis();
+      _reconnectReportMillis = millis();
+      _reconnectStartMillis = millis();
     }
+
     if (WiFi.status() != WL_CONNECTED)
     {
       if (millis() - _lastReconnectMillis > _reconnectTimeout)
@@ -4286,7 +4299,16 @@ bool FirebaseESP32::reconnect()
       _lastReconnectMillis = 0;
     }
   }
-  return WiFi.status() == WL_CONNECTED;
+
+  //reset the reconnect time to prevent overflow
+  if (_reconnectReportMillis > 1000000)
+    _reconnectReportMillis = millis() + _reconnectReportTimeout;
+
+  //report the true WiFi status when the WiFi connection resumed after the timeout period defined in WIFI_RECONNECT_STATUS_REPORT_TIMEOUT
+  if (_reconnectReportMillis > 0 && WiFi.status() == WL_CONNECTED && millis() - _reconnectReportMillis < _reconnectReportTimeout)
+    status = false;
+
+  return status;
 }
 
 void FirebaseESP32::errorToString(int httpCode, std::string &buff)
@@ -4594,52 +4616,56 @@ void FirebaseESP32::runStreamTask(FirebaseData &fbdo, const std::string &taskNam
         if (fbso[id].get().streamTimeout() && fbso[id].get()._timeoutCallback)
           fbso[id].get()._timeoutCallback(true);
 
-        if (res && fbso[id].get().streamAvailable() && (fbso[id].get()._dataAvailableCallback || fbso[id].get()._multiPathDataCallback))
+        if (Firebase.reconnect(fbso[id].get()))
         {
-          if (fbso[id].get()._dataAvailableCallback)
+
+          if (res && fbso[id].get().streamAvailable() && (fbso[id].get()._dataAvailableCallback || fbso[id].get()._multiPathDataCallback))
           {
-            StreamData s;
-            s._json = &fbso[id].get()._json;
-            s._jsonArr = &fbso[id].get()._jsonArr;
-            s._jsonData = &fbso[id].get()._jsonData;
-            s._streamPath = fbso[id].get()._streamPath;
-            s._data = fbso[id].get()._data;
-            s._path = fbso[id].get()._path;
-
-            s._dataType = fbso[id].get().resp_dataType;
-            s._dataTypeStr = fbso[id].get().getDataType(s._dataType);
-            s._eventTypeStr = fbso[id].get()._eventType;
-            s._idx = id;
-
-            if (fbso[id].get().resp_dataType == fb_esp_data_type::d_blob)
+            if (fbso[id].get()._dataAvailableCallback)
             {
-              s._blob = fbso[id].get()._blob;
-              //Free ram in case of callback data was used
-              fbso[id].get()._blob.clear();
+              StreamData s;
+              s._json = &fbso[id].get()._json;
+              s._jsonArr = &fbso[id].get()._jsonArr;
+              s._jsonData = &fbso[id].get()._jsonData;
+              s._streamPath = fbso[id].get()._streamPath;
+              s._data = fbso[id].get()._data;
+              s._path = fbso[id].get()._path;
+
+              s._dataType = fbso[id].get().resp_dataType;
+              s._dataTypeStr = fbso[id].get().getDataType(s._dataType);
+              s._eventTypeStr = fbso[id].get()._eventType;
+              s._idx = id;
+
+              if (fbso[id].get().resp_dataType == fb_esp_data_type::d_blob)
+              {
+                s._blob = fbso[id].get()._blob;
+                //Free ram in case of callback data was used
+                fbso[id].get()._blob.clear();
+              }
+              fbso[id].get()._dataAvailableCallback(s);
+              s.empty();
             }
-            fbso[id].get()._dataAvailableCallback(s);
-            s.empty();
-          }
-          else if (fbso[id].get()._multiPathDataCallback)
-          {
-
-            MultiPathStreamData mdata;
-            mdata._type = fbso[id].get().resp_dataType;
-            mdata._path = fbso[id].get()._path;
-            mdata._typeStr = fbso[id].get().getDataType(mdata._type);
-
-            if (mdata._type == fb_esp_data_type::d_json)
-              mdata._json = &fbso[id].get()._json;
-            else
+            else if (fbso[id].get()._multiPathDataCallback)
             {
-              if (mdata._type == fb_esp_data_type::d_string)
-                mdata._data = fbso[id].get()._data.substr(1, fbso[id].get()._data.length() - 2).c_str();
+
+              MultiPathStreamData mdata;
+              mdata._type = fbso[id].get().resp_dataType;
+              mdata._path = fbso[id].get()._path;
+              mdata._typeStr = fbso[id].get().getDataType(mdata._type);
+
+              if (mdata._type == fb_esp_data_type::d_json)
+                mdata._json = &fbso[id].get()._json;
               else
-                mdata._data = fbso[id].get()._data;
-            }
+              {
+                if (mdata._type == fb_esp_data_type::d_string)
+                  mdata._data = fbso[id].get()._data.substr(1, fbso[id].get()._data.length() - 2).c_str();
+                else
+                  mdata._data = fbso[id].get()._data;
+              }
 
-            fbso[id].get()._multiPathDataCallback(mdata);
-            mdata.empty();
+              fbso[id].get()._multiPathDataCallback(mdata);
+              mdata.empty();
+            }
           }
         }
       }
@@ -6116,6 +6142,8 @@ bool FirebaseData::streamTimeout()
   if (millis() - STREAM_ERROR_NOTIFIED_INTERVAL > _streamTimeoutMillis || _streamTimeoutMillis == 0)
   {
     _streamTimeoutMillis = millis();
+    if (_isDataTimeout)
+      Firebase.closeHTTP(*this);
     return _isDataTimeout;
   }
   return false;

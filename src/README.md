@@ -2723,9 +2723,11 @@ WiFiClient &getWiFiClient();
 
 
 
-## Close the keep-alive connection of the internal WiFi client.
+#### Close the keep-alive connection of the internal WiFi client.
 
-#### This will release the memory used by internal WiFi client.
+This will release the memory used by internal WiFi client.
+
+The next server connection will take time (a second) due to SSL/TLS handshaking
 
 ```C++
 void stopWiFiClient();

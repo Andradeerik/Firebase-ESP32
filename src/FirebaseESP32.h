@@ -60,6 +60,7 @@
 #define STREAM_RECONNECT_INTERVAL 1000
 #define MAX_REDIRECT 5
 #define WIFI_RECONNECT_TIMEOUT 10000
+#define WIFI_RECONNECT_STATUS_REPORT_TIMEOUT 5000
 #define STEAM_STACK_SIZE 8192
 #define QUEUE_TASK_STACK_SIZE 8192
 
@@ -2705,7 +2706,10 @@ private:
   bool _sdInUse = false;
   bool _sdConfigSet = false;
   unsigned long _lastReconnectMillis = 0;
+  unsigned long _reconnectReportMillis = 0;
+  unsigned long _reconnectStartMillis = 0;
   uint16_t _reconnectTimeout = WIFI_RECONNECT_TIMEOUT;
+  uint16_t _reconnectReportTimeout = WIFI_RECONNECT_STATUS_REPORT_TIMEOUT;
   uint8_t _sck, _miso, _mosi, _ss;
   File file;
   size_t _streamTaskStackSize = STEAM_STACK_SIZE;
