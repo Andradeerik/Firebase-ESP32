@@ -2644,7 +2644,6 @@ void FirebaseESP32::parseRespPayload(const char *buf, server_response_data_t &re
     }
     else if (stringCompare(buf, payloadOfs, fb_esp_pgm_str_93))
     {
-
       response.dataType = fb_esp_data_type::d_file;
       if ((response.isEvent && response.hasEventData) || getOfs)
       {
@@ -2890,7 +2889,7 @@ bool FirebaseESP32::waitResponse(FirebaseData &fbdo)
 
   if (respProcessing && fbdo._isStream)
     return true;
-    
+
   respProcessing = true;
   bool ret = handleResponse(fbdo);
   respProcessing = false;
@@ -4262,9 +4261,8 @@ bool FirebaseESP32::sdBegin(void)
 
 bool FirebaseESP32::reconnect(FirebaseData &fbdo, unsigned long dataTime)
 {
-  bool ret = reconnect();
-  if (!ret)
-    fbdo._httpCode = FIREBASE_ERROR_HTTPC_ERROR_CONNECTION_LOST;
+
+  bool status = WiFi.status() == WL_CONNECTED;
 
   if (dataTime > 0)
   {
@@ -4282,47 +4280,21 @@ bool FirebaseESP32::reconnect(FirebaseData &fbdo, unsigned long dataTime)
     }
   }
 
-  return ret;
-}
-
-bool FirebaseESP32::reconnect()
-{
-  bool status = WiFi.status() == WL_CONNECTED;
-
-  if (status)
-    _reconnectStartMillis = 0;
+  if (!status)
+  {
+    if (fbdo._httpConnected)
+      closeHTTP(fbdo);
+    fbdo._httpCode = FIREBASE_ERROR_HTTPC_ERROR_CONNECTION_LOST;
+  }
 
   if (_reconnectWiFi && !status)
   {
-    if (_lastReconnectMillis == 0)
+    if (millis() - _lastReconnectMillis > _reconnectTimeout)
     {
-      if (_reconnectStartMillis > 0)
-        WiFi.reconnect();
-
+      WiFi.reconnect();
       _lastReconnectMillis = millis();
-      _reconnectReportMillis = millis();
-      _reconnectStartMillis = millis();
-    }
-
-    if (WiFi.status() != WL_CONNECTED)
-    {
-      if (millis() - _lastReconnectMillis > _reconnectTimeout)
-        _lastReconnectMillis = 0;
-      return false;
-    }
-    else
-    {
-      _lastReconnectMillis = 0;
     }
   }
-
-  //reset the reconnect time to prevent overflow
-  if (_reconnectReportMillis > 1000000)
-    _reconnectReportMillis = millis() + _reconnectReportTimeout;
-
-  //report the true WiFi status when the WiFi connection resumed after the timeout period defined in WIFI_RECONNECT_STATUS_REPORT_TIMEOUT
-  if (_reconnectReportMillis > 0 && WiFi.status() == WL_CONNECTED && millis() - _reconnectReportMillis < _reconnectReportTimeout)
-    status = false;
 
   return status;
 }
