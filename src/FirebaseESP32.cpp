@@ -1914,7 +1914,8 @@ bool FirebaseESP32::beginStream(FirebaseData &fbdo, const String &path)
     return false;
 
   clearDataStatus(fbdo);
-  return handleResponse(fbdo);
+
+  return waitResponse(fbdo);
 }
 
 bool FirebaseESP32::beginMultiPathStream(FirebaseData &fbdo, const String &parentPath, const String *childPath, size_t size)
@@ -1932,7 +1933,7 @@ bool FirebaseESP32::beginMultiPathStream(FirebaseData &fbdo, const String &paren
     return false;
 
   clearDataStatus(fbdo);
-  return handleResponse(fbdo);
+  return waitResponse(fbdo);
 }
 
 bool FirebaseESP32::readStream(FirebaseData &fbdo)
@@ -2369,6 +2370,9 @@ bool FirebaseESP32::handleRequest(FirebaseData &fbdo, uint8_t storageType, const
   fbdo._req_dataType = dataType;
   fbdo._mismatchDataType = false;
 
+  while (respProcessing)
+    delay(0);
+
   int httpCode = sendRequest(fbdo, path, method, dataType, payload, priority);
 
   if (httpCode == 0)
@@ -2377,7 +2381,7 @@ bool FirebaseESP32::handleRequest(FirebaseData &fbdo, uint8_t storageType, const
 
     if (method == fb_esp_method::m_stream)
     {
-      if (!handleResponse(fbdo))
+      if (!waitResponse(fbdo))
       {
         closeHTTP(fbdo);
         return false;
@@ -2387,7 +2391,7 @@ bool FirebaseESP32::handleRequest(FirebaseData &fbdo, uint8_t storageType, const
     {
       fbdo._req_method = method;
       fbdo._req_dataType = dataType;
-      if (!handleResponse(fbdo))
+      if (!waitResponse(fbdo))
       {
         closeHTTP(fbdo);
         return false;
@@ -2397,7 +2401,7 @@ bool FirebaseESP32::handleRequest(FirebaseData &fbdo, uint8_t storageType, const
     {
       fbdo._req_method = method;
       fbdo._req_dataType = dataType;
-      if (!handleResponse(fbdo))
+      if (!waitResponse(fbdo))
       {
         closeHTTP(fbdo);
         return false;
@@ -2406,7 +2410,7 @@ bool FirebaseESP32::handleRequest(FirebaseData &fbdo, uint8_t storageType, const
     else
     {
       fbdo._path = path;
-      if (!handleResponse(fbdo))
+      if (!waitResponse(fbdo))
       {
         closeHTTP(fbdo);
         return false;
@@ -2879,6 +2883,19 @@ int FirebaseESP32::readChunkedData(WiFiClient *stream, char *out, int &chunkStat
   }
 
   return olen;
+}
+
+bool FirebaseESP32::waitResponse(FirebaseData &fbdo)
+{
+
+  if (respProcessing && fbdo._isStream)
+    return true;
+    
+  respProcessing = true;
+  bool ret = handleResponse(fbdo);
+  respProcessing = false;
+
+  return ret;
 }
 
 bool FirebaseESP32::handleResponse(FirebaseData &fbdo)
@@ -3441,7 +3458,7 @@ bool FirebaseESP32::handleResponse(FirebaseData &fbdo)
         std::string host, uri, auth;
         getUrlInfo(fbdo._redirectURL, host, uri, auth);
         if (sendRequest(fbdo, uri, fbdo._req_method, fbdo._req_dataType, "", fbdo._priority) == 0)
-          return handleResponse(fbdo);
+          return waitResponse(fbdo);
       }
     }
 
@@ -3609,6 +3626,8 @@ bool FirebaseESP32::handleStreamRead(FirebaseData &fbdo)
 
   if (reconnectStream)
   {
+    while (respProcessing)
+      delay(0);
 
     closeHTTP(fbdo);
 
@@ -3632,7 +3651,7 @@ bool FirebaseESP32::handleStreamRead(FirebaseData &fbdo)
     fbdo._isFCM = false;
   }
 
-  if (!handleResponse(fbdo))
+  if (!waitResponse(fbdo))
   {
     fbdo._isDataTimeout = true;
     if (!fbdo._httpConnected) //not connected in fcm shared object usage
@@ -4504,7 +4523,7 @@ void FirebaseESP32::setStreamCallback(FirebaseData &fbdo, StreamEventCallback da
 {
   removeMultiPathStreamCallback(fbdo);
 
-  int index = fbdo._index;
+  int index = fbdo._idx;
   std::string taskName;
   pgm_appendStr(taskName, fb_esp_pgm_str_72, true);
   char *idx = nullptr;
@@ -4534,7 +4553,7 @@ void FirebaseESP32::setStreamCallback(FirebaseData &fbdo, StreamEventCallback da
   taskName += idx;
   delS(idx);
 
-  fbdo._index = index;
+  fbdo._idx = index;
   objIdx = index;
   fbdo._dataAvailableCallback = dataAvailablecallback;
   fbdo._timeoutCallback = timeoutCallback;
@@ -4552,7 +4571,7 @@ void FirebaseESP32::setMultiPathStreamCallback(FirebaseData &fbdo, MultiPathStre
 {
   removeStreamCallback(fbdo);
 
-  int index = fbdo._index;
+  int index = fbdo._idx;
   std::string taskName;
   pgm_appendStr(taskName, fb_esp_pgm_str_72, true);
   char *idx = nullptr;
@@ -4582,7 +4601,7 @@ void FirebaseESP32::setMultiPathStreamCallback(FirebaseData &fbdo, MultiPathStre
   taskName += idx;
   delS(idx);
 
-  fbdo._index = index;
+  fbdo._idx = index;
   objIdx = index;
   fbdo._multiPathDataCallback = multiPathDataCallback;
   fbdo._timeoutCallback = timeoutCallback;
@@ -4680,7 +4699,7 @@ void FirebaseESP32::runStreamTask(FirebaseData &fbdo, const std::string &taskNam
 
 void FirebaseESP32::removeStreamCallback(FirebaseData &fbdo)
 {
-  int index = fbdo._index;
+  int index = fbdo._idx;
 
   if (index != -1)
   {
@@ -4692,7 +4711,7 @@ void FirebaseESP32::removeStreamCallback(FirebaseData &fbdo)
     }
 
     if (!hasOherHandles)
-      fbdo._index = -1;
+      fbdo._idx = -1;
 
     if (fbdo._handle)
       vTaskDelete(fbdo._handle);
@@ -4709,7 +4728,7 @@ void FirebaseESP32::removeStreamCallback(FirebaseData &fbdo)
 
 void FirebaseESP32::removeMultiPathStreamCallback(FirebaseData &fbdo)
 {
-  int index = fbdo._index;
+  int index = fbdo._idx;
 
   if (index != -1)
   {
@@ -4721,7 +4740,7 @@ void FirebaseESP32::removeMultiPathStreamCallback(FirebaseData &fbdo)
     }
 
     if (!hasOherHandles)
-      fbdo._index = -1;
+      fbdo._idx = -1;
 
     if (fbdo._handle)
       vTaskDelete(fbdo._handle);
@@ -4739,7 +4758,7 @@ void FirebaseESP32::removeMultiPathStreamCallback(FirebaseData &fbdo)
 void FirebaseESP32::beginAutoRunErrorQueue(FirebaseData &fbdo, QueueInfoCallback callback)
 {
 
-  int index = fbdo._index;
+  int index = fbdo._idx;
 
   std::string taskName;
   pgm_appendStr(taskName, fb_esp_pgm_str_72);
@@ -4768,7 +4787,7 @@ void FirebaseESP32::beginAutoRunErrorQueue(FirebaseData &fbdo, QueueInfoCallback
   else
     fbdo._queueInfoCallback = NULL;
 
-  fbdo._index = index;
+  fbdo._idx = index;
   errorQueueIndex = index;
 
   //object created
@@ -4801,7 +4820,7 @@ void FirebaseESP32::beginAutoRunErrorQueue(FirebaseData &fbdo, QueueInfoCallback
 
 void FirebaseESP32::endAutoRunErrorQueue(FirebaseData &fbdo)
 {
-  int index = fbdo._index;
+  int index = fbdo._idx;
 
   if (index != -1)
   {
@@ -4813,7 +4832,7 @@ void FirebaseESP32::endAutoRunErrorQueue(FirebaseData &fbdo)
     }
 
     if (!hasOherHandles)
-      fbdo._index = -1;
+      fbdo._idx = -1;
 
     if (fbdo._q_handle)
       vTaskDelete(fbdo._q_handle);
@@ -5698,7 +5717,7 @@ uint32_t FirebaseESP32::hex2int(const char *hex)
 
 FirebaseData::FirebaseData()
 {
-  _index = -1;
+  _idx = -1;
 }
 
 FirebaseData::~FirebaseData()
@@ -6887,7 +6906,7 @@ bool FCMObject::fcm_send(FirebaseData &fbdo, fb_esp_fcm_msg_type messageType)
   else
     fbdo._httpConnected = true;
 
-  ret = Firebase.handleResponse(fbdo);
+  ret = Firebase.waitResponse(fbdo);
   _sendResult.clear();
 
   if (ret)

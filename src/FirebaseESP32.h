@@ -351,10 +351,13 @@ class QueueInfo;
 class FirebaseESP32;
 class FCMObject;
 
+static bool respProcessing __attribute__((used)) = false;
 static std::vector<std::reference_wrapper<FirebaseData>> fbso;
 static uint8_t dataObjIdx __attribute__((used)) = 0;
 static uint8_t objIdx __attribute__((used)) = 0;
 static uint8_t errorQueueIndex __attribute__((used)) = 0;
+
+static std::vector<int> respQueueIdx;
 
 class StreamData
 {
@@ -614,6 +617,8 @@ private:
 
   friend class FirebaseESP32;
 };
+
+
 
 struct QueueItem
 {
@@ -2647,6 +2652,7 @@ private:
   bool stringCompare(const char *buf, int ofs, PGM_P beginH);
   int readLine(WiFiClient *stream, char *buf, int bufLen);
   int readChunkedData(WiFiClient *stream, char *out, int &chunkState, int &chunkedSize, int &dataLen, int bufLen);
+  bool waitResponse(FirebaseData &fbdo);
   bool handleResponse(FirebaseData &fbdo);
   bool clientAvailable(FirebaseData &fbdo, bool available);
   void closeFileHandle(FirebaseData &fbdo);
@@ -3064,7 +3070,7 @@ private:
   FirebaseESP32::QueueInfoCallback _queueInfoCallback = NULL;
   TaskHandle_t _handle = NULL;
   TaskHandle_t _q_handle = NULL;
-  int _index = -1;
+  int _idx = -1;
   uint8_t _dataTypeNum = 0;
 
   bool _isDataTimeout = false;

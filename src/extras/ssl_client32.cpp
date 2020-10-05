@@ -276,7 +276,6 @@ int start_ssl_client(sslclient_context32 *ssl_client, const char *host, uint32_t
     {
         if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE)
         {
-
             return handle_error(ret);
         }
         if ((millis() - handshake_start_time) > ssl_client->handshake_timeout)
