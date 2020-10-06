@@ -1,12 +1,12 @@
 /*
  * Google's Firebase Realtime Database Arduino Library for ESP32, version 3.8.1
  * 
- * October 4, 2020
+ * October 6, 2020
  * 
  * Feature Added:
  * 
  * Feature Fixed:
- * - WiFiClientSecure unhandled exception (mbedTLS memory released issue).
+ * - WiFiClientSecure unhandled exception.
  * 
  * 
  * This library provides ESP32 to perform REST API by GET PUT, POST, PATCH, DELETE data from/to with Google's Firebase database using get, set, update
@@ -76,7 +76,6 @@ struct StorageType
   static const uint8_t SPIFFS = 0;
   static const uint8_t SD = 1;
 };
-
 
 enum fb_esp_fcm_msg_type
 {
@@ -350,7 +349,7 @@ class QueueInfo;
 class FirebaseESP32;
 class FCMObject;
 
-static bool respProcessing __attribute__((used)) = false;
+static bool idleResponse __attribute__((used)) = false;
 static std::vector<std::reference_wrapper<FirebaseData>> fbso;
 static uint8_t dataObjIdx __attribute__((used)) = 0;
 static uint8_t objIdx __attribute__((used)) = 0;
@@ -616,8 +615,6 @@ private:
 
   friend class FirebaseESP32;
 };
-
-
 
 struct QueueItem
 {
@@ -2642,6 +2639,7 @@ private:
   void getUrlInfo(const std::string url, std::string &host, std::string &uri, std::string &auth);
   bool processRequest(FirebaseData &fbdo, fb_esp_method method, fb_esp_data_type dataType, const std::string &path, const char *buff, bool queue, const std::string &priority, const std::string &etag = "");
   bool processRequestFile(FirebaseData &fbdo, uint8_t storageType, fb_esp_method method, const std::string &path, const std::string &fileName, bool queue, const std::string &priority, const std::string &etag = "");
+  bool waitIdle(FirebaseData &fbdo);
   bool handleRequest(FirebaseData &fbdo, uint8_t storageType, const std::string &path, fb_esp_method method, fb_esp_data_type dataType, const std::string &payload, const std::string &priority, const std::string &etag);
   bool handleStreamRequest(FirebaseData &fbdo, const std::string &path);
   bool handleStreamRead(FirebaseData &fbdo);
@@ -2693,7 +2691,7 @@ private:
   bool base64_decode_SPIFFS(File &file, const char *src, size_t len);
   uint32_t hex2int(const char *hex);
 
-  bool sendFCMMessage(FirebaseData &fbdo, fb_esp_fcm_msg_type messageType);
+  bool handleFCMRequest(FirebaseData &fbdo, fb_esp_fcm_msg_type messageType);
 
   std::string _host = "";
   std::string _auth = "";
