@@ -6,7 +6,7 @@
  * Feature Added:
  * 
  * Feature Fixed:
- * - WiFiClientSecure unhandled exception.
+ * - WiFiClientSecure unhandled exception caused by the WiFi.reconnect() function immediately called after close the SSL connection.
  * 
  * 
  * This library provides ESP32 to perform REST API by GET PUT, POST, PATCH, DELETE data from/to with Google's Firebase database using get, set, update
@@ -707,6 +707,16 @@ public:
 
   */
   void setStreamTaskStackSize(size_t size);
+
+  /*
+    Enable multiple HTTP requests at a time.
+    
+    @param enable - The boolean value to enable/disable.
+
+    The multiple HTTP requessts at a time is disable by default to prevent the large memory used in multiple requests.
+
+  */
+  void allowMultipleRequests(bool enable);
 
   /*
     Reconnect WiFi if lost connection.
@@ -2705,6 +2715,7 @@ private:
   bool _sdOk = false;
   bool _sdInUse = false;
   bool _sdConfigSet = false;
+  bool _multipleRequests = false;
   unsigned long _lastReconnectMillis = 0;
   uint16_t _reconnectTimeout = WIFI_RECONNECT_TIMEOUT;
   uint8_t _sck, _miso, _mosi, _ss;

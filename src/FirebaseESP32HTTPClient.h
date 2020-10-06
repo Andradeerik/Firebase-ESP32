@@ -35,7 +35,6 @@
 
 #ifdef ESP32
 
-
 #include <Arduino.h>
 #include <WiFiClient.h>
 #include <FS.h>

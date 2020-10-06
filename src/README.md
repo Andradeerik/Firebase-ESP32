@@ -62,6 +62,23 @@ The stream task will be created only when the user sets the stream callbacks.
 
 
 
+
+#### Enable multiple HTTP requests at a time.
+    
+param **`enable`** - The boolean value to enable/disable.
+
+The multiple HTTP requessts at a time is disable by default to prevent the large memory used in multiple requests.
+
+```C++
+  void allowMultipleRequests(bool enable);
+```
+
+
+
+
+
+
+
 #### Reconnect WiFi if lost connection
 
 param **`reconnect`** - The boolean to set/unset WiFi AP reconnection.

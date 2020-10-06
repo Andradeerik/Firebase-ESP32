@@ -6,7 +6,7 @@
  * Feature Added:
  * 
  * Feature Fixed:
- * - WiFiClientSecure unhandled exception.
+ * - WiFiClientSecure unhandled exception caused by the WiFi.reconnect() function immediately called after close the SSL connection.
  * 
  * 
  * This library provides ESP32 to perform REST API by GET PUT, POST, PATCH, DELETE data from/to with Google's Firebase database using get, set, update
@@ -16,6 +16,7 @@
  * 
  * The MIT License (MIT)
  * Copyright (c) 2019 K. Suwatchai (Mobizt)
+ * 
  * 
  * Permission is hereby granted, free of charge, to any person returning a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -100,6 +101,11 @@ void FirebaseESP32::setStreamTaskStackSize(size_t size)
     _streamTaskStackSize = size;
   else
     _streamTaskStackSize = 8192;
+}
+
+void FirebaseESP32::allowMultipleRequests(bool enable)
+{
+  _multipleRequests = enable;
 }
 
 void FirebaseESP32::reconnectWiFi(bool reconnect)
@@ -2335,6 +2341,9 @@ char *FirebaseESP32::newS(char *p, size_t len, char *d)
 
 bool FirebaseESP32::waitIdle(FirebaseData &fbdo)
 {
+  if (_multipleRequests)
+    return true;
+
   unsigned long wTime = millis();
   while (processing)
   {
@@ -3688,6 +3697,7 @@ void FirebaseESP32::closeHTTP(FirebaseData &fbdo)
       if (fbdo.httpClient.stream()->connected())
         fbdo.httpClient.stream()->stop();
     }
+
     _lastReconnectMillis = millis();
   }
   fbdo._httpConnected = false;
