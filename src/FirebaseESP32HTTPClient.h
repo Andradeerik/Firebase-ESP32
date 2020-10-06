@@ -41,7 +41,7 @@
 #include <FS.h>
 #include <SPIFFS.h>
 #include <SD.h>
-#include "extras/WiFiClientSecureESP32.h"
+#include "wcs/WiFiClientSecureESP32.h"
 #if __has_include(<WiFiEspAT.h>) || __has_include(<espduino.h>)
 #error WiFi UART bridge was not supported.
 #endif

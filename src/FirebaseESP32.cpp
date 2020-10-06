@@ -2336,7 +2336,7 @@ char *FirebaseESP32::newS(char *p, size_t len, char *d)
 bool FirebaseESP32::waitIdle(FirebaseData &fbdo)
 {
   unsigned long wTime = millis();
-  while (idleResponse)
+  while (processing)
   {
     if (millis() - wTime > 3000)
     {
@@ -2903,12 +2903,12 @@ int FirebaseESP32::readChunkedData(WiFiClient *stream, char *out, int &chunkStat
 bool FirebaseESP32::waitResponse(FirebaseData &fbdo)
 {
 
-  if (idleResponse && fbdo._isStream)
+  if (processing && fbdo._isStream)
     return true;
 
-  idleResponse = true;
+  processing = true;
   bool ret = handleResponse(fbdo);
-  idleResponse = false;
+  processing = false;
 
   return ret;
 }
@@ -3688,6 +3688,7 @@ void FirebaseESP32::closeHTTP(FirebaseData &fbdo)
       if (fbdo.httpClient.stream()->connected())
         fbdo.httpClient.stream()->stop();
     }
+    _lastReconnectMillis = millis();
   }
   fbdo._httpConnected = false;
 }
@@ -4298,16 +4299,19 @@ bool FirebaseESP32::reconnect(FirebaseData &fbdo, unsigned long dataTime)
   {
     if (fbdo._httpConnected)
       closeHTTP(fbdo);
-    fbdo._httpCode = FIREBASE_ERROR_HTTPC_ERROR_CONNECTION_LOST;
-  }
 
-  if (_reconnectWiFi && !status)
-  {
-    if (millis() - _lastReconnectMillis > _reconnectTimeout)
+    fbdo._httpCode = FIREBASE_ERROR_HTTPC_ERROR_CONNECTION_LOST;
+
+    if (_reconnectWiFi)
     {
-      WiFi.reconnect();
-      _lastReconnectMillis = millis();
+      if (millis() - _lastReconnectMillis > _reconnectTimeout)
+      {
+        WiFi.reconnect();
+        _lastReconnectMillis = millis();
+      }
     }
+
+    status = WiFi.status() == WL_CONNECTED;
   }
 
   return status;
@@ -6885,7 +6889,10 @@ bool FCMObject::fcm_send(FirebaseData &fbdo, fb_esp_fcm_msg_type messageType)
   std::string().swap(header);
 
   if (ret != 0)
+  {
+    Firebase.closeHTTP(fbdo);
     return false;
+  }
   else
     fbdo._httpConnected = true;
 

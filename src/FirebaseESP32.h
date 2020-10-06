@@ -349,7 +349,7 @@ class QueueInfo;
 class FirebaseESP32;
 class FCMObject;
 
-static bool idleResponse __attribute__((used)) = false;
+static bool processing __attribute__((used)) = false;
 static std::vector<std::reference_wrapper<FirebaseData>> fbso;
 static uint8_t dataObjIdx __attribute__((used)) = 0;
 static uint8_t objIdx __attribute__((used)) = 0;
