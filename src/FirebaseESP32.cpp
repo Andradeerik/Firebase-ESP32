@@ -4304,7 +4304,7 @@ bool FirebaseESP32::reconnect(FirebaseData &fbdo, unsigned long dataTime)
 
     if (_reconnectWiFi)
     {
-      if (millis() - _lastReconnectMillis > _reconnectTimeout)
+      if (millis() - _lastReconnectMillis > _reconnectTimeout && !fbdo._httpConnected)
       {
         WiFi.reconnect();
         _lastReconnectMillis = millis();
